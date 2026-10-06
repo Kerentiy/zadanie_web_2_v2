@@ -92,9 +92,6 @@ Demo::query()->orderByDesc('id')->get();
 > `initdb` выполняется только на пустом томе (`make clean && make up` пересоздаёт БД, затем `make migrate`).
 
 ## Логирование (Monolog)
-
-Настроено по [руководству Monolog](https://seldaek.github.io/monolog/doc/01-usage.html):
-
 * **Logger + handler.** Один `Logger` с `RotatingFileHandler` (уровень из `LOG_LEVEL`, ежедневная ротация,
   хранится `LOG_MAX_FILES` файлов) → `app/storage/logs/app-YYYY-MM-DD.log`.
 * **Formatter.** `LineFormatter`: `[время] канал.УРОВЕНЬ [request-id]: сообщение {контекст}`.
@@ -114,7 +111,6 @@ Demo::query()->orderByDesc('id')->get();
 
 * Значения `Authorization`, `Cookie` и т. п. и JSON-поля `password`, `token`… заменяются на `***`
   (списки в `app/config/logging.php`).
-* Тела длиннее `LOG_BODY_MAX_BYTES` (10 КБ) обрезаются, бинарные данные не пишутся.
 
 Логи пишутся в bind mount `./app`, поэтому читать их можно прямо с хоста: `make tail-http`.
 
@@ -127,29 +123,4 @@ curl localhost:8080/users
 curl localhost:8080/users/1
 ```
 
-> Windows: консоль может отправить кириллицу в `curl -d` не в UTF-8 — сервер ответит `400 Invalid JSON body`.
-> Используйте `\uXXXX`-escape, JSON из файла (`--data-binary @body.json`) или латиницу.
 
-## Когда пересобирать, а когда достаточно F5 или restart
-
-- **Правки в `app/`** (PHP-код, миграции) — видны сразу, без пересборки (`./app` смонтирован volume'ом,
-  opcache проверяет файлы на каждый запрос). Новую миграцию примените через `make migrate`.
-- **Правки в конфигах** (`docker/nginx/conf.d/*.conf`, `php.ini`, `www.conf`, `postgresql.conf`) — нужен
-  `docker compose restart <сервис>`.
-- **Правки в `Dockerfile` или `app/composer.json`** — `make build`, затем `make up` (и `make composer`,
-  если менялся `composer.json`).
-
-## Linux / macOS / Windows (WSL2)
-
-`make init` подставляет в `.env` UID/GID текущего пользователя, а Dockerfile php пересоздаёт `www-data` с этими
-же ID — файлы, которые пишет php-fpm (`app/vendor`, `app/storage/logs`), на хосте принадлежат вам, а не root.
-
-- **Linux / macOS (Docker Desktop)** — работает «из коробки».
-- **Windows + WSL2** — запускайте `make`/`docker compose` из терминала WSL2 (не из PowerShell/cmd/Git Bash) и держите
-  проект **внутри файловой системы WSL2** (`~/projects/...`), а не на `/mnt/c/...`. В Docker Desktop должна быть
-  включена WSL-интеграция.
-- **Переносы строк** — `.gitattributes` форсирует LF для всех файлов репозитория.
-
-## Лицензия
-
-MIT
