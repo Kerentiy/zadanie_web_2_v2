@@ -1,49 +1,49 @@
 # Учебное окружение: nginx + php-fpm + PostgreSQL + Eloquent + Monolog
 
-Каркас — [local_zoo_for_vyatgu](https://github.com/romicharroyo/local_zoo_for_vyatgu): Docker Compose-стек
-(nginx → php-fpm 8.5 → PostgreSQL 18, чистый PHP без фреймворков, образы собираются из `docker/`).
-Поверх него добавлено:
-
-| Что | Как |
-|---|---|
-| **Eloquent ORM** ([docs 12.x](https://laravel.com/docs/12.x/eloquent)) | `illuminate/database` (standalone, `Capsule`); `index.php` и `health.php` больше не используют PDO |
-| **Мигратор** | Illuminate Migrator + CLI `app/bin/migrate`; схему БД создают миграции, а не `initdb` |
-| **Monolog** ([руководство](https://seldaek.github.io/monolog/doc/01-usage.html)) | логи в `app/storage/logs/`, каждый HTTP-запрос логируется вместе с телом ответа |
+Каркас — (https://github.com/romicharroyo/local_zoo_for_vyatgu)
 
 ## Быстрый старт
 
-```bash
-make init && make up && make composer && make migrate
-```
-
-- `make init` — создаёт `.env` из `.env.example` с UID/GID текущего пользователя.
-- `make up` — собирает и поднимает контейнеры.
-- `make composer` — ставит зависимости приложения в `app/vendor/`.
-- `make migrate` — выполняет миграции (создаёт таблицы `demo` и `users`, добавляет первую запись в `demo`).
-
+docker compose down
+docker compose up -d
+docker compose ps
+docker compose exec -u www-data php composer install
+docker compose exec -u www-data php php bin/migrate migrate
 После этого:
 
 - приложение — http://127.0.0.1:8080/ (страница со списком записей `demo` и формой, всё через Eloquent)
 - health-check — http://127.0.0.1:8080/health.php
 - JSON API — `GET/POST http://127.0.0.1:8080/users`, `GET /users/{id}`
-- PostgreSQL — `127.0.0.1:5432` (логин/пароль/база из `.env`), либо `make psql`
+- PostgreSQL — `127.0.0.1:5433` (логин/пароль/база из `.env`), либо `make psql`
 
 Все команды — в `make help`.
 
 ## Команды Makefile
 
-| Команда | Что делает |
-|---|---|
-| `make init / build / up / down / ps / logs / clean` | как в исходном каркасе (`clean` удаляет том с данными PostgreSQL) |
-| `make composer` | `composer install` внутри php-контейнера |
-| `make sh`, `make psql` | shell в php-контейнере, консоль psql |
-| `make migrate` | выполнить новые миграции |
-| `make migrate-status` | показать статус миграций |
-| `make rollback` | откатить последний batch |
-| `make migrate-fresh` | откатить всё и накатить заново (**данные будут потеряны**) |
-| `make migration name=create_posts_table create=posts` | создать файл миграции (`create=` — новая таблица, `table=` — изменение существующей) |
-| `make tail-log` | читать лог приложения (все каналы) |
-| `make tail-http` | читать только лог HTTP-запросов |
+# Сборка и запуск
+docker compose build
+docker compose up -d
+docker compose down
+docker compose ps
+docker compose logs -f
+docker compose down -v          # удалить контейнеры и том с данными PostgreSQL
+
+# Зависимости и консоли
+docker compose exec -u www-data php composer install
+docker compose exec php sh
+docker compose exec postgres psql -U app -d app
+
+# Миграции
+docker compose exec -u www-data php php bin/migrate migrate
+docker compose exec -u www-data php php bin/migrate status
+docker compose exec -u www-data php php bin/migrate rollback
+docker compose exec -u www-data php php bin/migrate fresh      # данные будут потеряны
+docker compose exec -u www-data php php bin/migrate make create_posts_table --create=posts
+docker compose exec -u www-data php php bin/migrate make add_x_to_users --table=users
+
+# Логи
+Get-Content app\storage\logs\app-*.log -Wait -Tail 20
+Get-Content app\storage\logs\app-*.log -Wait -Tail 50 | Select-String ' http\.'
 
 ## Структура
 
@@ -72,16 +72,6 @@ app/                                   приложение (bind mount в ко�
 Подключение поднимается в `App\Database\Database::boot()` из `app/config/database.php`. В Docker
 параметры приходят из `compose.yaml` (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`), драйвер — `pgsql`.
 Часовой пояс сессии PostgreSQL выравнивается по PHP (`date.timezone` из `docker/php/php.ini`), чтобы `timestamptz` не «плыл».
-
-```php
-use App\Models\Demo;
-
-Demo::create(['note' => 'Привет']);
-Demo::query()->orderByDesc('id')->get();
-```
-
-Для запуска **без Docker** (PHP ≥ 8.2 + `pdo_sqlite`): `cd app && cp .env.example .env`, в `.env` поставить
-`DB_CONNECTION=sqlite`, затем `composer install && php bin/migrate migrate && php -S 127.0.0.1:8000 -t public`.
 
 ## Миграции
 
@@ -114,13 +104,6 @@ Demo::query()->orderByDesc('id')->get();
 
 Логи пишутся в bind mount `./app`, поэтому читать их можно прямо с хоста: `make tail-http`.
 
-## JSON API
 
-```bash
-curl -XPOST localhost:8080/users -H 'Content-Type: application/json' \
-  -d '{"name":"Ada","email":"ada@example.com"}'
-curl localhost:8080/users
-curl localhost:8080/users/1
-```
 
 
