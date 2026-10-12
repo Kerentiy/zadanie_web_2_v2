@@ -8,7 +8,13 @@ use App\Database\MigrationRunner;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-$app = Application::boot(dirname(__DIR__));
+try {
+    $app = Application::boot(dirname(__DIR__));
+} catch (RuntimeException | InvalidArgumentException $e) {
+    // например: не задан APP_ENV или не расшифровался параметр конфига
+    fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");
+    exit(1);
+}
 $config = $app->config['database'];
 
 $runner = new MigrationRunner(

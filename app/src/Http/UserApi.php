@@ -22,7 +22,7 @@ final class UserApi
     {
         // GET /users - список
         if ($method === 'GET' && $path === '/users') {
-            Json::response(['data' => User::query()->orderByDesc('id')->limit(50)->get()]);
+            Json::response(['data' => User::query()->orderByDesc('user_id')->limit(50)->get()]);
             return true;
         }
 
@@ -35,7 +35,7 @@ final class UserApi
             return true;
         }
 
-        // POST /users {"name": "...", "email": "..."}
+        // POST /users {"name": "...", "email": "...", "password": "..."}
         if ($method === 'POST' && $path === '/users') {
             $this->create();
             return true;
@@ -57,6 +57,7 @@ final class UserApi
 
         $name = trim((string) ($input['name'] ?? ''));
         $email = trim((string) ($input['email'] ?? ''));
+        $password = (string) ($input['password'] ?? '');
 
         $errors = [];
         if ($name === '') {
@@ -67,13 +68,19 @@ final class UserApi
         } elseif (User::where('email', $email)->exists()) {
             $errors['email'] = 'Already taken';
         }
+        // bcrypt (PASSWORD_DEFAULT) учитывает только первые 72 байта пароля
+        if (strlen($password) < 8 || strlen($password) > 72) {
+            $errors['password'] = 'From 8 to 72 bytes';
+        }
         if ($errors !== []) {
             Json::response(['errors' => $errors], 422);
             return;
         }
 
-        $user = User::create(['name' => $name, 'email' => $email]);
-        $this->log->info('User created', ['id' => $user->id]);
+        $user = new User(['name' => $name, 'email' => $email]);
+        $user->setPassword($password); // в БД попадает только хэш
+        $user->save();
+        $this->log->info('User created', ['user_id' => $user->user_id]);
         Json::response(['data' => $user], 201);
     }
 }

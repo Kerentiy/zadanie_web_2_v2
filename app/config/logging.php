@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Config\Config;
 use Illuminate\Support\Env;
+
+/** @var Config $params статический конфиг (config/params.php) для текущего окружения */
 
 $basePath = dirname(__DIR__);
 
@@ -13,9 +16,9 @@ if (!str_starts_with($path, '/') && !str_starts_with($path, 'php://')) {
 
 return [
     'path' => rtrim($path, '/'),
-    'level' => strtolower((string) Env::get('LOG_LEVEL', 'debug')),
+    'level' => strtolower((string) (Env::get('LOG_LEVEL') ?? $params->get('log.level', 'info'))),
     'max_files' => (int) Env::get('LOG_MAX_FILES', 14),
-    'log_queries' => (bool) Env::get('LOG_QUERIES', false),
+    'log_queries' => filter_var(Env::get('LOG_QUERIES') ?? $params->get('log.queries', false), FILTER_VALIDATE_BOOLEAN),
 
     'http' => [
         // Bodies longer than this are truncated in the log

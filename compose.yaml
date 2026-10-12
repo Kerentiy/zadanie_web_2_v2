@@ -42,7 +42,10 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_CONNECTION: pgsql
       # Приложение: Eloquent + Monolog (логи пишутся в ./app/storage/logs/)
+      # Окружение (одно из config/params.php: local | staging | production) и ключ шифрования
+      # значений конфига. Ключ задаётся ТОЛЬКО в локальном .env (в git не коммитится)
       APP_ENV: ${APP_ENV:-local}
+      APP_CONFIG_KEY: ${APP_CONFIG_KEY:-}
       APP_DEBUG: ${APP_DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       LOG_MAX_FILES: ${LOG_MAX_FILES:-14}

@@ -101,6 +101,9 @@ try {
         <dt>Расширение pdo_pgsql</dt>
         <dd class="<?= $hasPdoPgsql ? 'ok' : 'fail' ?>"><?= $hasPdoPgsql ? 'подключено' : 'отсутствует' ?></dd>
 
+        <dt>Приложение / окружение</dt>
+        <dd><?= h((string) $app->config['app']['name']) ?> / <?= h($app->params->env()) ?></dd>
+
         <dt>Хост контейнера</dt>
         <dd><?= h((string) $hostname) ?></dd>
 

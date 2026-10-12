@@ -8,7 +8,7 @@ export
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help init build up down ps logs clean composer sh psql migrate rollback migrate-status migrate-fresh migration tail-log tail-http
+.PHONY: help init build up down ps logs clean composer sh psql migrate rollback migrate-status migrate-fresh migration tail-log tail-http config-env config-list config-check key-generate encrypt decrypt
 
 help:
 	@echo "make init      — создать .env из .env.example (с UID/GID текущего пользователя)"
@@ -26,6 +26,12 @@ help:
 	@echo "make migrate-status  — статус миграций"
 	@echo "make migrate-fresh   — откатить все миграции и накатить заново (данные будут потеряны)"
 	@echo "make migration name=create_posts_table [create=posts|table=users] — создать файл миграции"
+	@echo "make config-env      — текущее окружение (APP_ENV), есть ли APP_CONFIG_KEY"
+	@echo "make config-list     — параметры текущего окружения (секреты скрыты)"
+	@echo "make config-check    — проверить, что все enc:v1:... значения расшифровываются"
+	@echo "make key-generate    — сгенерировать ключ шифрования для APP_CONFIG_KEY"
+	@echo "make encrypt         — зашифровать значение (спросит ввод; или value=...)"
+	@echo "make decrypt value=enc:v1:... — расшифровать значение"
 	@echo "make tail-log        — читать лог приложения (app/storage/logs, все каналы)"
 	@echo "make tail-http       — читать только лог HTTP-запросов (канал http)"
 
@@ -98,3 +104,25 @@ tail-log:
 
 tail-http:
 	tail -F app/storage/logs/app-*.log | grep --line-buffered ' http\.'
+
+# --- Статический конфиг и шифрование (app/config/params.php, bin/config) ---
+config-env:
+	docker compose exec -u www-data php php bin/config env
+
+config-list:
+	docker compose exec -u www-data php php bin/config list
+
+config-check:
+	docker compose exec -u www-data php php bin/config check
+
+key-generate:
+	docker compose exec -u www-data php php bin/config key:generate
+
+# make encrypt            - значение спросят с клавиатуры (не попадёт в историю shell)
+# make encrypt value=...  - значение в аргументе
+encrypt:
+	docker compose exec -u www-data php php bin/config encrypt $(value)
+
+decrypt:
+	@test -n "$(value)" || { echo "Usage: make decrypt value=enc:v1:..."; exit 1; }
+	docker compose exec -u www-data php php bin/config decrypt $(value)

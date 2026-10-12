@@ -1,0 +1,136 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Application;
+use App\Security\Encrypter;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+/**
+ * Консольная утилита статического конфига и шифрования.
+ * Окружение берётся из APP_ENV, ключ - из APP_CONFIG_KEY.
+ */
+
+$basePath = dirname(__DIR__);
+$args = array_slice($argv, 1);
+$command = array_shift($args) ?? 'help';
+$reveal = in_array('--reveal', $args, true);
+$args = array_values(array_filter($args, static fn (string $a) => $a !== '--reveal'));
+
+function fail(string $message): never
+{
+    fwrite(STDERR, "Error: {$message}\n");
+    exit(1);
+}
+
+function requireEncrypter(): Encrypter
+{
+    return Application::encrypter()
+        ?? fail('APP_CONFIG_KEY is not set. Generate a key: php bin/config key:generate (then put it into .env and restart containers).');
+}
+
+function show(mixed $value): string
+{
+    return is_scalar($value) || $value === null
+        ? var_export($value, true)
+        : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+try {
+    Application::loadEnv($basePath);
+
+    switch ($command) {
+        case 'key:generate':
+            echo Encrypter::generateKey() . "\n";
+            fwrite(STDERR, "Put it into .env as APP_CONFIG_KEY=<the line above>. Never commit it to git.\n");
+            break;
+
+        case 'encrypt':
+            // значение лучше не писать в командной строке (оно останется в истории shell),
+            // поэтому, если аргумента нет, читаем его со стандартного ввода
+            $value = $args[0] ?? null;
+            if ($value === null) {
+                fwrite(STDERR, "Value to encrypt: ");
+                $line = fgets(STDIN);
+                $value = $line === false ? '' : rtrim($line, "\r\n");
+            }
+            if ($value === '') {
+                fail('Nothing to encrypt.');
+            }
+            echo requireEncrypter()->encrypt($value) . "\n";
+            break;
+
+        case 'decrypt':
+            $value = $args[0] ?? fail('Usage: php bin/config decrypt <enc:v1:...>');
+            echo requireEncrypter()->decrypt($value) . "\n";
+            break;
+
+        case 'env':
+            $params = Application::loadParams($basePath);
+            echo "APP_ENV:           {$params->env()}\n";
+            echo 'Known environments: ' . implode(', ', $params->environments()) . "\n";
+            echo 'APP_CONFIG_KEY:    ' . ($params->hasEncrypter() ? 'set' : 'NOT set') . "\n";
+            echo 'openssl:           ' . (extension_loaded('openssl') ? OPENSSL_VERSION_TEXT : 'NOT loaded') . "\n";
+            break;
+
+        case 'list':
+            $params = Application::loadParams($basePath);
+            $secret = $params->encryptedKeys();
+            foreach ($params->flatten() as $key => $value) {
+                if (in_array($key, $secret, true)) {
+                    $value = $reveal ? $params->get($key) : '******** (encrypted)';
+                }
+                echo str_pad($key, 24) . ' = ' . (is_string($value) ? $value : show($value)) . "\n";
+            }
+            break;
+
+        case 'get':
+            $key = $args[0] ?? fail('Usage: php bin/config get <key> [--reveal]');
+            $params = Application::loadParams($basePath);
+            $params->has($key) || fail("Parameter \"{$key}\" not found in environment \"{$params->env()}\".");
+            if (!$reveal && $params->isEncrypted($key)) {
+                echo "******** (encrypted, use --reveal to print)\n";
+                break;
+            }
+            echo (is_string($v = $params->get($key)) ? $v : show($v)) . "\n";
+            break;
+
+        case 'check':
+            $params = Application::loadParams($basePath);
+            $keys = $params->encryptedKeys();
+            if ($keys === []) {
+                echo "No encrypted parameters in environment \"{$params->env()}\".\n";
+                break;
+            }
+            $bad = 0;
+            foreach ($keys as $key) {
+                try {
+                    $params->get($key);
+                    echo "  OK    {$key}\n";
+                } catch (RuntimeException $e) {
+                    $bad++;
+                    echo "  FAIL  {$e->getMessage()}\n";
+                }
+            }
+            exit($bad === 0 ? 0 : 1);
+
+        default:
+            echo <<<TXT
+            Usage: php bin/config <command>
+
+              env                    текущее окружение, список окружений, есть ли ключ
+              key:generate           сгенерировать ключ шифрования (для APP_CONFIG_KEY)
+              encrypt [value]        зашифровать значение -> enc:v1:... (без аргумента спросит со stdin)
+              decrypt <enc:v1:...>   расшифровать значение
+              list [--reveal]        все параметры текущего окружения (секреты скрыты)
+              get <key> [--reveal]   один параметр, например db.host
+              check                  проверить, что все зашифрованные параметры расшифровываются
+
+            TXT;
+            exit($command === 'help' ? 0 : 1);
+    }
+} catch (Throwable $e) {
+    fail($e->getMessage());
+}

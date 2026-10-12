@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Config\Config;
 use Illuminate\Support\Env;
+
+/** @var Config $params статический конфиг (config/params.php) для текущего окружения */
 
 $basePath = dirname(__DIR__);
 
@@ -19,11 +22,12 @@ return [
     'connections' => [
         'pgsql' => [
             'driver' => 'pgsql',
-            'host' => Env::get('DB_HOST', 'postgres'),
-            'port' => Env::get('DB_PORT', '5432'),
-            'database' => Env::get('DB_NAME', 'app'),
-            'username' => Env::get('DB_USER', 'app'),
-            'password' => Env::get('DB_PASSWORD', ''),
+            'host' => Env::get('DB_HOST') ?? $params->get('db.host', 'postgres'),
+            'port' => Env::get('DB_PORT') ?? $params->get('db.port', 5432),
+            'database' => Env::get('DB_NAME') ?? $params->get('db.name', 'app'),
+            'username' => Env::get('DB_USER') ?? $params->get('db.user', 'app'),
+            // пароль: DB_PASSWORD или зашифрованный db.password из params.php (расшифруется ключом APP_CONFIG_KEY)
+            'password' => Env::get('DB_PASSWORD') ?? $params->get('db.password', ''),
             'charset' => 'utf8',
             'prefix' => '',
             'search_path' => 'public',

@@ -21,6 +21,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install -j"$(nproc)" zip \
     && rm -rf /var/lib/apt/lists/*
 
+# openssl (openssl_encrypt/openssl_decrypt) нужен для шифрования значений конфига
+# (App\Security\Encrypter). В официальном образе php он вкомпилирован в ядро, поэтому
+# отдельная установка не нужна — но на всякий случай проверяем это при сборке образа:
+# если расширения нет, сборка упадёт сразу, а не при первом обращении к секрету
+RUN php -r 'exit(extension_loaded("openssl") && in_array("aes-256-gcm", openssl_get_cipher_methods(), true) ? 0 : 1);'
+
 # Composer берём готовым бинарником из официального образа —
 # без curl | sh и без лишнего слоя с исходниками composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

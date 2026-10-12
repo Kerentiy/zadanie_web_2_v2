@@ -36,7 +36,7 @@ final class Database
             $events->listen(QueryExecuted::class, static function (QueryExecuted $query) use ($queryLogger): void {
                 $queryLogger->info('SQL: {sql}', [
                     'sql' => $query->sql,
-                    'bindings' => $query->bindings,
+                    'bindings' => array_map(self::maskBinding(...), $query->bindings),
                     'time_ms' => $query->time,
                     'connection' => $query->connectionName,
                 ]);
@@ -48,6 +48,12 @@ final class Database
         $capsule->bootEloquent();  // enable the static Eloquent Model API
 
         return $capsule;
+    }
+
+    /** Хэши паролей (bcrypt/argon2) в лог SQL не пишем. */
+    private static function maskBinding(mixed $value): mixed
+    {
+        return is_string($value) && preg_match('/^\$(2[abxy]|argon2(id|i|d))\$/', $value) === 1 ? '***' : $value;
     }
 
     /** @param array<string, mixed> $connection */
